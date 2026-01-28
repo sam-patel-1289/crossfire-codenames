@@ -8,6 +8,9 @@ import { dirname } from 'path';
 
 const app = express();
 app.use(cors());
+app.get('/', (req, res) => {
+    res.send('Codenames Server Running');
+});
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {

@@ -70,12 +70,7 @@ export default function SpymasterView() {
     }
   }, [room, isLoading, hasJoined, currentPlayer, joinAsPlayer]);
 
-  // Auto-hide key when it's my turn to select (prevent accidental cheating)
-  useEffect(() => {
-    if (isMyTurnToSelect) {
-      setShowSecretKey(false);
-    }
-  }, [isMyTurnToSelect]);
+  // Spymasters should always see the key by default\n  // Removed auto-hide logic - spymasters need to see answers at all times
 
   if (isLoading) {
     return (

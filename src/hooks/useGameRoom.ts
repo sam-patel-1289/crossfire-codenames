@@ -6,6 +6,9 @@ import { generateBoardWords, generateSecretKey, pickStartingTeam } from '@/lib/w
 import { validateClue } from '@/lib/gameLogic';
 
 export function useGameRoom(roomCode?: string) {
+  // Normalize room code - trim whitespace and convert to uppercase
+  const normalizedRoomCode = roomCode?.trim().toUpperCase();
+
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [cards, setCards] = useState<BoardCard[]>([]);
   const [players, setPlayers] = useState<GamePlayer[]>([]);
@@ -33,16 +36,44 @@ export function useGameRoom(roomCode?: string) {
 
   // Subscribe to room updates
   useEffect(() => {
-    if (!roomCode) {
+    if (!normalizedRoomCode) {
       setIsLoading(false);
       return;
     }
 
-    // Request to join room
-    socket.emit('join_room', { roomCode, sessionId });
+    let hasJoined = false; // Prevent double joining from StrictMode
+
+    console.log(`[useGameRoom] Effect started for room ${normalizedRoomCode}`);
+    console.log(`[useGameRoom] Socket connected: ${socket.connected}, Socket ID: ${socket.id}`);
+
+    const joinRoom = () => {
+      if (hasJoined) {
+        console.log(`[useGameRoom] Already joined, skipping duplicate join`);
+        return;
+      }
+      hasJoined = true;
+      console.log(`[useGameRoom] Emitting join_room for ${normalizedRoomCode}, sessionId: ${sessionId}`);
+      socket.emit('join_room', { roomCode: normalizedRoomCode, sessionId });
+    };
+
+    const onConnect = () => {
+      console.log(`[useGameRoom] Socket connected event fired, now joining`);
+      joinRoom();
+    };
+
+    // Wait for socket to be connected before joining
+    // This fixes the race condition where direct URL access tries to join before socket connects
+    if (socket.connected) {
+      console.log(`[useGameRoom] Socket already connected, joining immediately`);
+      joinRoom();
+    } else {
+      console.log(`[useGameRoom] Socket not connected, waiting for connect event...`);
+      socket.on('connect', onConnect);
+    }
 
     // Listen for state updates
     const onStateUpdate = (updatedRoom: any) => {
+      console.log(`[useGameRoom] Received state_update for room ${updatedRoom.room_code}`);
       setRoom(updatedRoom);
       setCards(updatedRoom.cards || []);
 
@@ -59,6 +90,7 @@ export function useGameRoom(roomCode?: string) {
       // Find self
       const me = updatedRoom.players?.find((p: any) => p.sessionId === sessionId);
       if (me) {
+        console.log(`[useGameRoom] Found current player: ${me.role}`);
         setCurrentPlayer({
           id: me.id,
           room_id: updatedRoom.id,
@@ -67,12 +99,15 @@ export function useGameRoom(roomCode?: string) {
           joined_at: me.joinedAt,
           last_seen: me.lastSeen
         });
+      } else {
+        console.log(`[useGameRoom] Current player not found in players list`);
       }
 
       setIsLoading(false);
     };
 
     const onError = (err: { message: string }) => {
+      console.error(`[useGameRoom] Socket error:`, err);
       setError(err.message);
       setIsLoading(false);
     };
@@ -81,10 +116,13 @@ export function useGameRoom(roomCode?: string) {
     socket.on('error', onError);
 
     return () => {
+      console.log(`[useGameRoom] Cleanup for room ${normalizedRoomCode}`);
+      hasJoined = true; // Prevent any pending joins after cleanup
+      socket.off('connect', onConnect);
       socket.off('state_update', onStateUpdate);
       socket.off('error', onError);
     };
-  }, [roomCode, sessionId]);
+  }, [normalizedRoomCode, sessionId]);
 
 
   const createRoom = useCallback(async (): Promise<string | null> => {
@@ -101,24 +139,24 @@ export function useGameRoom(roomCode?: string) {
   // Join an existing room (Client side logic mostly handled by effect)
   const joinRoom = useCallback(async (code: string, role: PlayerRole = 'spectator'): Promise<boolean> => {
     // Just trigger the join
-    socket.emit('join_room', { roomCode: code, role, sessionId });
+    socket.emit('join_room', { roomCode: code.trim().toUpperCase(), role, sessionId });
     return true;
   }, [sessionId]);
 
   const joinAsPlayer = useCallback(async (): Promise<boolean> => {
-    if (!roomCode) return false;
-    socket.emit('join_room', { roomCode, role: 'spectator', sessionId });
+    if (!normalizedRoomCode) return false;
+    socket.emit('join_room', { roomCode: normalizedRoomCode, role: 'spectator', sessionId });
     return true;
-  }, [roomCode, sessionId]);
+  }, [normalizedRoomCode, sessionId]);
 
   const assignRole = useCallback(async (role: PlayerRole): Promise<boolean> => {
-    if (!roomCode) return false;
-    socket.emit('join_room', { roomCode, role, sessionId });
+    if (!normalizedRoomCode) return false;
+    socket.emit('join_room', { roomCode: normalizedRoomCode, role, sessionId });
     return true;
-  }, [roomCode, sessionId]);
+  }, [normalizedRoomCode, sessionId]);
 
   const startGame = useCallback(async (): Promise<boolean> => {
-    if (!room || !roomCode) return false;
+    if (!room || !normalizedRoomCode) return false;
 
     const startingTeam = pickStartingTeam();
     const words = generateBoardWords();
@@ -136,12 +174,12 @@ export function useGameRoom(roomCode?: string) {
       revealed_at: null
     }));
 
-    socket.emit('init_game', { roomCode, cards: newCards, startingTeam });
+    socket.emit('init_game', { roomCode: normalizedRoomCode, cards: newCards, startingTeam });
     return true;
-  }, [room, roomCode]);
+  }, [room, normalizedRoomCode]);
 
   const submitClue = useCallback(async (word: string, number: number): Promise<boolean> => {
-    if (!room || !roomCode) return false;
+    if (!room || !normalizedRoomCode) return false;
 
     // Strict validation
     if (room.strict_clue_rules) {
@@ -153,40 +191,40 @@ export function useGameRoom(roomCode?: string) {
       }
     }
 
-    socket.emit('submit_clue', { roomCode, word, number });
+    socket.emit('submit_clue', { roomCode: normalizedRoomCode, word, number });
     return true;
-  }, [room, roomCode, cards]);
+  }, [room, normalizedRoomCode, cards]);
 
   const selectWord = useCallback(async (cardId: string): Promise<any> => {
-    if (!roomCode) return { success: false };
-    socket.emit('select_card', { roomCode, cardId });
+    if (!normalizedRoomCode) return { success: false };
+    socket.emit('select_card', { roomCode: normalizedRoomCode, cardId });
     return { success: true };
-  }, [roomCode]);
+  }, [normalizedRoomCode]);
 
   const endTurnEarly = useCallback(async (): Promise<boolean> => {
-    if (!roomCode) return false;
-    socket.emit('end_turn', { roomCode });
+    if (!normalizedRoomCode) return false;
+    socket.emit('end_turn', { roomCode: normalizedRoomCode });
     return true;
-  }, [roomCode]);
+  }, [normalizedRoomCode]);
 
   const resetGame = useCallback(async (): Promise<boolean> => {
-    if (!roomCode) return false;
-    socket.emit('reset_game', { roomCode });
+    if (!normalizedRoomCode) return false;
+    socket.emit('reset_game', { roomCode: normalizedRoomCode });
     return true;
-  }, [roomCode]);
+  }, [normalizedRoomCode]);
 
   // Challenge
   const challengeClue = useCallback(async (): Promise<boolean> => {
-    if (!roomCode) return false;
-    socket.emit('challenge_clue', { roomCode });
+    if (!normalizedRoomCode) return false;
+    socket.emit('challenge_clue', { roomCode: normalizedRoomCode });
     return true;
-  }, [roomCode]);
+  }, [normalizedRoomCode]);
 
   const resolveChallenge = useCallback(async (decision: 'allowed' | 'rejected'): Promise<boolean> => {
-    if (!roomCode) return false;
-    socket.emit('resolve_challenge', { roomCode, decision });
+    if (!normalizedRoomCode) return false;
+    socket.emit('resolve_challenge', { roomCode: normalizedRoomCode, decision });
     return true;
-  }, [roomCode]);
+  }, [normalizedRoomCode]);
 
 
   return {

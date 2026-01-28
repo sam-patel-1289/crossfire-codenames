@@ -45,7 +45,6 @@ export function GameStatus({ room, isTV = false }: GameStatusProps) {
         )}
       </div>
 
-      {/* Clue Display */}
       {room.current_clue_word && (
         <div className="text-center mb-4">
           <div className="text-muted-foreground text-sm uppercase tracking-wide mb-1">
@@ -53,10 +52,11 @@ export function GameStatus({ room, isTV = false }: GameStatusProps) {
           </div>
           <div className={cn(
             "font-black tracking-tight",
-            isTV ? "text-5xl sm:text-6xl" : "text-3xl sm:text-4xl"
+            isTV ? "text-5xl sm:text-6xl" : "text-3xl sm:text-4xl",
+            teamColors[room.current_turn!]
           )}>
             {room.current_clue_word}
-            <span className="text-primary ml-2">
+            <span className="ml-2">
               {room.current_clue_number}
             </span>
           </div>
@@ -75,25 +75,25 @@ export function GameStatus({ room, isTV = false }: GameStatusProps) {
         </div>
       )}
 
-      {/* Score Display */}
+      {/* Score Display - Words Remaining */}
       <div className="flex justify-center gap-8 mt-4">
         <div className="text-center">
-          <div className="text-red-500 font-bold text-sm uppercase tracking-wide">Red</div>
           <div className={cn(
             "font-black text-red-500",
             isTV ? "text-4xl" : "text-2xl"
           )}>
-            {room.red_score} / {room.red_target}
+            {room.red_target - room.red_score}
           </div>
+          <div className="text-red-500 font-bold text-sm uppercase tracking-wide">Red</div>
         </div>
         <div className="text-center">
-          <div className="text-blue-500 font-bold text-sm uppercase tracking-wide">Blue</div>
           <div className={cn(
             "font-black text-blue-500",
             isTV ? "text-4xl" : "text-2xl"
           )}>
-            {room.blue_score} / {room.blue_target}
+            {room.blue_target - room.blue_score}
           </div>
+          <div className="text-blue-500 font-bold text-sm uppercase tracking-wide">Blue</div>
         </div>
       </div>
     </div>

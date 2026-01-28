@@ -4,12 +4,26 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import path, { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 app.use(cors());
-app.get('/', (req, res) => {
+
+// Serve static files from the React app build directory
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// API/Health check
+app.get('/health', (req, res) => {
     res.send('Codenames Server Running');
+});
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get(/.*/, (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 const httpServer = createServer(app);

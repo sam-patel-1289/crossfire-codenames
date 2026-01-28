@@ -11,6 +11,9 @@ const __dirname = dirname(__filename);
 
 const app = express();
 app.use(cors());
+app.get('/', (req, res) => {
+    res.send('Codenames Server Running');
+});
 
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../dist')));
